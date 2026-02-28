@@ -460,6 +460,42 @@ php artisan zatca:cleanup --all
 php artisan zatca:cleanup --all --force
 ```
 
+### Programmatic Usage
+
+You can also execute the onboarding process directly in your code using the `OnboardingService`:
+
+```php
+use Corecave\Zatca\Facades\Zatca;
+use Corecave\Zatca\DTO\OnboardingProfile;
+
+// 1. Create a profile DTO with your details
+$profile = new OnboardingProfile(
+    organization: 'My Company',
+    organizationUnit: 'HQ',
+    commonName: 'TST-886431145-310000000000003',
+    vatNumber: '310000000000003',
+    invoiceTypes: '1100', // Both B2B and B2C
+    environment: 'simulation'
+);
+
+// 2. Generate CSR
+$csrData = Zatca::onboarding()->generateCsr($profile);
+
+// 3. Get Compliance CSID (Requires OTP from FATOORA portal)
+$otp = '123456';
+$complianceCert = Zatca::onboarding()->getComplianceCsid($csrData['csr'], $csrData['private_key'], $otp);
+
+// 4. Run Compliance Checks
+$checksResult = Zatca::onboarding()->runComplianceChecks($complianceCert, $profile->invoiceTypes);
+
+if ($checksResult['passed']) {
+    // 5. Get Production CSID
+    $productionCert = Zatca::onboarding()->getProductionCsid($complianceCert, $complianceCert->getRequestId());
+    
+    // You are now ready to issue invoices!
+}
+```
+
 ## Debugging
 
 Enable debug mode to save XML files for inspection:

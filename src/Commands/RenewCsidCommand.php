@@ -2,10 +2,8 @@
 
 namespace Corecave\Zatca\Commands;
 
-use Corecave\Zatca\Certificate\Certificate;
 use Corecave\Zatca\Certificate\CertificateManager;
-use Corecave\Zatca\Certificate\CsrGenerator;
-use Corecave\Zatca\Contracts\ApiClientInterface;
+use Corecave\Zatca\Services\OnboardingService;
 use Illuminate\Console\Command;
 
 class RenewCsidCommand extends Command
@@ -27,8 +25,7 @@ class RenewCsidCommand extends Command
      */
     public function handle(
         CertificateManager $certManager,
-        CsrGenerator $csrGenerator,
-        ApiClientInterface $client
+        OnboardingService $onboarding
     ): int {
         $this->info('ZATCA Production CSID Renewal');
         $this->newLine();
@@ -65,39 +62,18 @@ class RenewCsidCommand extends Command
             $otp = $this->ask('Enter OTP from FATOORA portal');
         }
 
-        // Generate new CSR
-        $this->info('Generating new CSR...');
-
-        try {
-            $csrData = $csrGenerator->generate();
-        } catch (\Exception $e) {
-            $this->error('Failed to generate CSR: '.$e->getMessage());
-
-            return self::FAILURE;
-        }
-
         // Request renewal
         $this->info('Requesting CSID renewal...');
 
         try {
-            $client->setCertificate($currentCert);
-            $response = $client->renewProductionCsid($csrData['csr'], $otp);
+            $result = $onboarding->renewProductionCsid($currentCert, $otp);
 
             $this->info('CSID renewed successfully!');
             $this->newLine();
 
-            // Store new certificate
-            $newCert = Certificate::fromApiResponse(
-                $response,
-                $csrData['private_key'],
-                'production'
-            );
-
-            $certManager->store($newCert);
-
             // Display new certificate info
-            $this->components->twoColumnDetail('New Certificate Expires', $newCert->getExpiresAt()?->format('Y-m-d H:i:s') ?? 'Unknown');
-            $this->components->twoColumnDetail('Request ID', $response['requestID'] ?? 'N/A');
+            $this->components->twoColumnDetail('New Certificate Expires', $result['certificate']->getExpiresAt()?->format('Y-m-d H:i:s') ?? 'Unknown');
+            $this->components->twoColumnDetail('Request ID', $result['request_id'] ?? 'N/A');
 
             $this->newLine();
             $this->info('New production certificate stored and activated!');

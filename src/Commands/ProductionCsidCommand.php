@@ -2,9 +2,8 @@
 
 namespace Corecave\Zatca\Commands;
 
-use Corecave\Zatca\Certificate\Certificate;
 use Corecave\Zatca\Certificate\CertificateManager;
-use Corecave\Zatca\Contracts\ApiClientInterface;
+use Corecave\Zatca\Services\OnboardingService;
 use Illuminate\Console\Command;
 
 class ProductionCsidCommand extends Command
@@ -23,7 +22,7 @@ class ProductionCsidCommand extends Command
     /**
      * Execute the console command.
      */
-    public function handle(CertificateManager $certManager, ApiClientInterface $client): int
+    public function handle(CertificateManager $certManager, OnboardingService $onboarding): int
     {
         $this->info('Requesting Production CSID...');
         $this->newLine();
@@ -31,7 +30,7 @@ class ProductionCsidCommand extends Command
         // Get compliance certificate
         $complianceCert = $certManager->getActive('compliance');
 
-        if (! $complianceCert) {
+        if (!$complianceCert) {
             $this->error('No active compliance certificate found.');
             $this->line('Please run: php artisan zatca:compliance first');
 
@@ -49,30 +48,19 @@ class ProductionCsidCommand extends Command
         $this->newLine();
 
         try {
-            // Use compliance certificate for authentication (as per ZATCA spec)
-            $client->setCertificate($complianceCert);
-            $response = $client->requestProductionCsid($requestId);
+            $productionCert = $onboarding->getProductionCsid($complianceCert, $requestId);
 
             $this->info('Production CSID received!');
             $this->newLine();
 
-            // Store production certificate
-            $productionCert = Certificate::fromApiResponse(
-                $response,
-                $complianceCert->getPrivateKey(),
-                'production'
-            );
-
-            $certManager->store($productionCert);
-
             // Display certificate info
             $this->components->twoColumnDetail('Certificate Type', 'Production');
-            $this->components->twoColumnDetail('Request ID', $response['requestID'] ?? 'N/A');
-            $this->components->twoColumnDetail('Token Type', $response['tokenType'] ?? 'N/A');
+            $this->components->twoColumnDetail('Request ID', $productionCert->getRequestId() ?? 'N/A');
+            $this->components->twoColumnDetail('Token Type', 'N/A'); // Not immediately available without $response array
 
             if ($productionCert->getExpiresAt()) {
                 $this->components->twoColumnDetail('Expires', $productionCert->getExpiresAt()->format('Y-m-d H:i:s'));
-                $this->components->twoColumnDetail('Days Until Expiry', (string) $productionCert->getExpiresAt()->diffInDays(now()));
+                $this->components->twoColumnDetail('Days Until Expiry', (string)$productionCert->getExpiresAt()->diffInDays(now()));
             }
 
             $this->newLine();
@@ -85,8 +73,9 @@ class ProductionCsidCommand extends Command
             $this->line('  - Or use Zatca::process() to automatically determine the type');
 
             return self::SUCCESS;
-        } catch (\Exception $e) {
-            $this->error('Failed to get Production CSID: '.$e->getMessage());
+        }
+        catch (\Exception $e) {
+            $this->error('Failed to get Production CSID: ' . $e->getMessage());
 
             if (str_contains($e->getMessage(), 'compliance')) {
                 $this->warn('Make sure you have completed all compliance checks.');

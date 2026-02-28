@@ -2,9 +2,9 @@
 
 namespace Corecave\Zatca\Commands;
 
-use Corecave\Zatca\Certificate\CsrGenerator;
+use Corecave\Zatca\DTO\OnboardingProfile;
+use Corecave\Zatca\Services\OnboardingService;
 use Illuminate\Console\Command;
-use Illuminate\Support\Str;
 
 class GenerateCsrCommand extends Command
 {
@@ -28,43 +28,31 @@ class GenerateCsrCommand extends Command
     /**
      * Execute the console command.
      */
-    public function handle(CsrGenerator $generator): int
+    public function handle(OnboardingService $onboarding): int
     {
         $this->info('Generating CSR for ZATCA onboarding...');
         $this->newLine();
 
-        // Gather configuration
-        $config = $this->gatherConfig();
-
-        // Generate serial number
-        // For sandbox/simulation, use TST format; for production, use organization name
-        $uuid = (string) Str::uuid();
-        $environment = config('zatca.environment', 'sandbox');
-        $serialPrefix = in_array($environment, ['sandbox', 'simulation']) ? 'TST' : $config['organization'];
-        $serialNumber = sprintf(
-            '1-%s|2-%s|3-%s',
-            $serialPrefix,
-            $serialPrefix,  // Also use TST for the version part in test environments
-            $uuid
-        );
-        $config['serial_number'] = $serialNumber;
+        // Gather configuration into DTO
+        $profile = $this->gatherConfig();
 
         try {
-            $result = $generator->generate($config);
+            $result = $onboarding->generateCsr($profile);
 
             $this->info('CSR generated successfully!');
             $this->newLine();
 
             // Display CSR info
-            $this->components->twoColumnDetail('Serial Number', $serialNumber);
-            $this->components->twoColumnDetail('Organization', $config['organization']);
-            $this->components->twoColumnDetail('VAT Number', $config['vat_number']);
-            $this->components->twoColumnDetail('Invoice Types', $this->getInvoiceTypesLabel($config['invoice_types']));
+            $this->components->twoColumnDetail('Serial Number', $profile->serialNumber);
+            $this->components->twoColumnDetail('Organization', $profile->organization);
+            $this->components->twoColumnDetail('VAT Number', $profile->vatNumber);
+            $this->components->twoColumnDetail('Invoice Types', $this->getInvoiceTypesLabel($profile->invoiceTypes));
             $this->newLine();
 
             if ($this->option('save')) {
                 $this->saveFiles($result);
-            } else {
+            }
+            else {
                 $this->displayCsr($result);
             }
 
@@ -74,8 +62,9 @@ class GenerateCsrCommand extends Command
             $this->line('  2. Run: php artisan zatca:compliance --otp=<YOUR_OTP>');
 
             return self::SUCCESS;
-        } catch (\Exception $e) {
-            $this->error('Failed to generate CSR: '.$e->getMessage());
+        }
+        catch (\Exception $e) {
+            $this->error('Failed to generate CSR: ' . $e->getMessage());
 
             return self::FAILURE;
         }
@@ -84,7 +73,7 @@ class GenerateCsrCommand extends Command
     /**
      * Gather configuration from options or interactively.
      */
-    protected function gatherConfig(): array
+    protected function gatherConfig(): OnboardingProfile
     {
         $config = config('zatca.csr', []);
 
@@ -115,16 +104,17 @@ class GenerateCsrCommand extends Command
         // Invoice types
         $invoiceTypes = $this->option('invoice-types') ?? $config['invoice_types'] ?? '1100';
 
-        return [
-            'country' => 'SA',
-            'organization' => $organization,
-            'organization_unit' => $organizationUnit,
-            'common_name' => $commonName,
-            'vat_number' => $vatNumber,
-            'invoice_types' => $invoiceTypes,
-            'location' => $config['location'] ?? [],
-            'business_category' => $config['business_category'] ?? 'Technology',
-        ];
+        return new OnboardingProfile(
+            $organization,
+            $organizationUnit,
+            $commonName,
+            $vatNumber,
+            $invoiceTypes,
+            $config['location'] ?? [],
+            $config['business_category'] ?? 'Technology',
+            null,
+            config('zatca.environment', 'sandbox')
+            );
     }
 
     /**
@@ -134,7 +124,7 @@ class GenerateCsrCommand extends Command
     {
         $outputDir = $this->option('output') ?? storage_path('zatca');
 
-        if (! is_dir($outputDir)) {
+        if (!is_dir($outputDir)) {
             mkdir($outputDir, 0755, true);
         }
 
@@ -169,10 +159,10 @@ class GenerateCsrCommand extends Command
     protected function getInvoiceTypesLabel(string $types): string
     {
         return match ($types) {
-            '1000' => 'B2C only (Simplified)',
-            '0100' => 'B2B only (Standard)',
-            '1100' => 'Both B2B and B2C',
-            default => $types,
-        };
+                '1000' => 'B2C only (Simplified)',
+                '0100' => 'B2B only (Standard)',
+                '1100' => 'Both B2B and B2C',
+                default => $types,
+            };
     }
 }

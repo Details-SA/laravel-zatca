@@ -3,14 +3,7 @@
 namespace Corecave\Zatca\Commands;
 
 use Corecave\Zatca\Certificate\Certificate;
-use Corecave\Zatca\Certificate\CertificateManager;
-use Corecave\Zatca\Certificate\CsrGenerator;
-use Corecave\Zatca\Contracts\ApiClientInterface;
-use Corecave\Zatca\Enums\VatCategory;
-use Corecave\Zatca\Invoice\InvoiceBuilder;
-use Corecave\Zatca\Qr\QrGenerator;
-use Corecave\Zatca\Xml\UblGenerator;
-use Corecave\Zatca\Xml\XmlSigner;
+use Corecave\Zatca\Services\OnboardingService;
 use Illuminate\Console\Command;
 
 class ComplianceCommand extends Command
@@ -32,14 +25,8 @@ class ComplianceCommand extends Command
     /**
      * Execute the console command.
      */
-    public function handle(
-        CsrGenerator $csrGenerator,
-        CertificateManager $certManager,
-        ApiClientInterface $client,
-        UblGenerator $xmlGenerator,
-        XmlSigner $signer,
-        QrGenerator $qrGenerator
-    ): int {
+    public function handle(OnboardingService $onboarding): int
+    {
         $this->info('Starting ZATCA Compliance Process...');
         $this->newLine();
 
@@ -50,9 +37,9 @@ class ComplianceCommand extends Command
         }
 
         // Get or generate CSR
-        $csrData = $this->getCsrData($csrGenerator);
+        $csrData = $this->getCsrData();
 
-        if (! $csrData) {
+        if (!$csrData) {
             return self::FAILURE;
         }
 
@@ -60,44 +47,55 @@ class ComplianceCommand extends Command
         $this->info('Step 1: Requesting Compliance CSID...');
 
         try {
-            $response = $client->requestComplianceCsid($csrData['csr'], $otp);
+            $complianceCert = $onboarding->getComplianceCsid($csrData['csr'], $csrData['private_key'], $otp);
 
-            $this->info('Compliance CSID received!');
-            $this->components->twoColumnDetail('Request ID', $response['requestID'] ?? 'N/A');
+            $this->info('Compliance CSID received and stored!');
+            $this->components->twoColumnDetail('Request ID', $complianceCert->getRequestId() ?? 'N/A');
             $this->newLine();
-        } catch (\Exception $e) {
-            $this->error('Failed to get Compliance CSID: '.$e->getMessage());
+        }
+        catch (\Exception $e) {
+            $this->error('Failed to get Compliance CSID: ' . $e->getMessage());
 
             return self::FAILURE;
         }
 
-        // Store compliance certificate
-        $complianceCert = Certificate::fromApiResponse($response, $csrData['private_key'], 'compliance');
-        $certManager->store($complianceCert);
-
-        $this->info('Compliance certificate stored.');
-        $this->newLine();
-
         // Step 2: Run compliance checks
-        if (! $this->option('skip-checks')) {
+        if (!$this->option('skip-checks')) {
             $this->info('Step 2: Running compliance checks...');
 
-            $client->setCertificate($complianceCert);
+            $invoiceTypes = config('zatca.csr.invoice_types', '1100');
+            $checksResult = $onboarding->runComplianceChecks($complianceCert, $invoiceTypes);
 
-            $checksResult = $this->runComplianceChecks(
-                $client,
-                $xmlGenerator,
-                $signer,
-                $qrGenerator,
-                $complianceCert
-            );
+            foreach ($checksResult['results'] as $result) {
+                $this->line("  Submitting {$result['sample']['type']} {$result['sample']['subtype']}...");
 
-            if (! $checksResult) {
+                if ($result['status'] === 'PASS') {
+                    $this->info('    PASS');
+                }
+                elseif ($result['accepted']) {
+                    $this->warn("    PASS (with warnings)");
+                    $this->displayValidationWarnings($result['response']);
+                }
+                elseif ($result['status'] === 'ERROR') {
+                    $this->error("    ERROR: {$result['error']}");
+                }
+                else {
+                    $this->error("    FAIL: {$result['status']}");
+                    $this->displayValidationErrors($result['response']);
+                }
+            }
+
+            $this->newLine();
+            $this->components->twoColumnDetail('Passed', (string)$checksResult['passed_count']);
+            $this->components->twoColumnDetail('Failed', (string)$checksResult['failed_count']);
+
+            if (!$checksResult['passed']) {
                 $this->error('Compliance checks failed.');
 
                 return self::FAILURE;
             }
-        } else {
+        }
+        else {
             $this->warn('Skipping compliance checks (--skip-checks)');
         }
 
@@ -115,13 +113,13 @@ class ComplianceCommand extends Command
     /**
      * Get CSR data from file or generate new.
      */
-    protected function getCsrData(CsrGenerator $generator): ?array
+    protected function getCsrData(): ?array
     {
         $csrPath = $this->option('csr');
         $keyPath = $this->option('private-key');
 
         if ($csrPath && $keyPath) {
-            if (! file_exists($csrPath) || ! file_exists($keyPath)) {
+            if (!file_exists($csrPath) || !file_exists($keyPath)) {
                 $this->error('CSR or private key file not found');
 
                 return null;
@@ -160,159 +158,7 @@ class ComplianceCommand extends Command
         return null;
     }
 
-    /**
-     * Run compliance checks by submitting sample invoices.
-     */
-    protected function runComplianceChecks(
-        ApiClientInterface $client,
-        UblGenerator $xmlGenerator,
-        XmlSigner $signer,
-        QrGenerator $qrGenerator,
-        Certificate $certificate
-    ): bool {
-        $invoiceTypes = config('zatca.csr.invoice_types', '1100');
 
-        $sampleInvoices = [];
-
-        // B2C samples (if supported)
-        if (in_array($invoiceTypes, ['1000', '1100'])) {
-            $sampleInvoices[] = ['type' => 'simplified', 'subtype' => 'invoice'];
-            $sampleInvoices[] = ['type' => 'simplified', 'subtype' => 'credit_note'];
-            $sampleInvoices[] = ['type' => 'simplified', 'subtype' => 'debit_note'];
-        }
-
-        // B2B samples (if supported)
-        if (in_array($invoiceTypes, ['0100', '1100'])) {
-            $sampleInvoices[] = ['type' => 'standard', 'subtype' => 'invoice'];
-            $sampleInvoices[] = ['type' => 'standard', 'subtype' => 'credit_note'];
-            $sampleInvoices[] = ['type' => 'standard', 'subtype' => 'debit_note'];
-        }
-
-        $passed = 0;
-        $failed = 0;
-
-        foreach ($sampleInvoices as $index => $sample) {
-            $this->line("  Submitting {$sample['type']} {$sample['subtype']}...");
-
-            try {
-                // Build sample invoice
-                $invoice = $this->buildSampleInvoice($sample, $index + 1);
-
-                // Generate XML
-                $xml = $xmlGenerator->generate($invoice);
-
-                // Generate hash and sign
-                $hash = $signer->generateInvoiceHash($xml);
-                $invoice->setHash($hash);
-
-                $signedXml = $signer->sign(
-                    $xml,
-                    $certificate->getPrivateKey(),
-                    $certificate->getCertificatePem()
-                );
-
-                // Generate QR code for simplified (B2C) invoices
-                // QR code is also needed for compliance check invoices
-                $signatureValue = $signer->getSignatureValue($signedXml);
-                $publicKeyDer = $certificate->getPublicKeyRaw();
-                $certificateSignature = $certificate->getCertificateSignature();
-                $qrCode = $qrGenerator->generate($invoice, $signatureValue, $publicKeyDer, $certificateSignature);
-
-                // Add QR code to XML
-                $signedXml = $xmlGenerator->addQrCode($signedXml, $qrCode);
-
-                // Submit for compliance check
-                $response = $client->submitComplianceInvoice(
-                    $signedXml,
-                    $hash,
-                    $invoice->getUuid()
-                );
-
-                $status = strtoupper($response['validationResults']['status'] ?? 'UNKNOWN');
-                $reportingStatus = $response['reportingStatus'] ?? null;
-                $clearanceStatus = $response['clearanceStatus'] ?? null;
-
-                // Invoice is accepted if status is PASS/WARNING and it was REPORTED or CLEARED
-                $isAccepted = in_array($status, ['PASS', 'WARNING'])
-                    && ($reportingStatus === 'REPORTED' || $clearanceStatus === 'CLEARED');
-
-                if ($status === 'PASS') {
-                    $this->info('    PASS');
-                    $passed++;
-                } elseif ($isAccepted) {
-                    $this->warn("    PASS (with warnings)");
-                    $this->displayValidationWarnings($response);
-                    $passed++;
-                } else {
-                    $this->error("    FAIL: {$status}");
-                    $this->displayValidationErrors($response);
-                    $failed++;
-                }
-            } catch (\Exception $e) {
-                $this->error("    ERROR: {$e->getMessage()}");
-                $failed++;
-            }
-        }
-
-        $this->newLine();
-        $this->components->twoColumnDetail('Passed', (string) $passed);
-        $this->components->twoColumnDetail('Failed', (string) $failed);
-
-        return $failed === 0;
-    }
-
-    /**
-     * Build a sample invoice for compliance testing.
-     */
-    protected function buildSampleInvoice(array $sample, int $number): \Corecave\Zatca\Contracts\InvoiceInterface
-    {
-        $isSimplified = $sample['type'] === 'simplified';
-        $isCredit = $sample['subtype'] === 'credit_note';
-        $isDebit = $sample['subtype'] === 'debit_note';
-
-        if ($isCredit) {
-            $builder = InvoiceBuilder::creditNote($isSimplified);
-            $builder->setOriginalInvoice('SME00001');
-            $builder->setReason('Compliance test credit note');
-        } elseif ($isDebit) {
-            $builder = InvoiceBuilder::debitNote($isSimplified);
-            $builder->setOriginalInvoice('SME00001');
-            $builder->setReason('Compliance test debit note');
-        } else {
-            $builder = $isSimplified
-                ? InvoiceBuilder::simplified()
-                : InvoiceBuilder::standard();
-        }
-
-        $builder->setInvoiceNumber("SME0000{$number}");
-
-        // Add buyer for standard invoices
-        if (! $isSimplified) {
-            $builder->setBuyer([
-                'name' => 'Test Buyer Company',
-                'vat_number' => '300000000000003',
-                'registration_number' => '1234567890',
-                'address' => [
-                    'street' => 'Test Street',
-                    'building' => '1234',
-                    'city' => 'Riyadh',
-                    'district' => 'Test District',
-                    'postal_code' => '12345',
-                    'country' => 'SA',
-                ],
-            ]);
-        }
-
-        $builder->addLineItem([
-            'name' => 'Test Product',
-            'quantity' => 1,
-            'unit_price' => 100.00,
-            'vat_category' => VatCategory::STANDARD,
-            'vat_rate' => 15.00,
-        ]);
-
-        return $builder->build();
-    }
 
     /**
      * Display validation errors from response.

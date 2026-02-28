@@ -19,6 +19,7 @@ use Corecave\Zatca\Qr\QrGenerator;
 use Corecave\Zatca\Xml\UblGenerator;
 use Corecave\Zatca\Xml\XmlSigner;
 use Corecave\Zatca\Xml\XmlValidator;
+use Corecave\Zatca\Services\OnboardingService;
 use Illuminate\Support\ServiceProvider;
 
 class ZatcaServiceProvider extends ServiceProvider
@@ -29,7 +30,7 @@ class ZatcaServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->mergeConfigFrom(
-            __DIR__.'/../config/zatca.php',
+            __DIR__ . '/../config/zatca.php',
             'zatca'
         );
 
@@ -39,60 +40,72 @@ class ZatcaServiceProvider extends ServiceProvider
         });
 
         // Register API client
-        $this->app->singleton(ApiClientInterface::class, function ($app) {
+        $this->app->singleton(ApiClientInterface::class , function ($app) {
             return new ZatcaClient(
-                config('zatca.environment', 'sandbox')
+            config('zatca.environment', 'sandbox')
             );
         });
 
         // Register CSR generator
-        $this->app->singleton(CsrGenerator::class, function ($app) {
+        $this->app->singleton(CsrGenerator::class , function ($app) {
             return new CsrGenerator(config('zatca.csr', []));
         });
 
         // Register certificate manager
-        $this->app->singleton(CertificateManager::class, function ($app) {
+        $this->app->singleton(CertificateManager::class , function ($app) {
             return new CertificateManager(
-                config('zatca.certificates', [])
+            config('zatca.certificates', [])
             );
         });
 
         // Register UBL generator
-        $this->app->singleton(UblGenerator::class, function ($app) {
+        $this->app->singleton(UblGenerator::class , function ($app) {
             return new UblGenerator;
         });
 
         // Register XML signer
-        $this->app->singleton(XmlSigner::class, function ($app) {
+        $this->app->singleton(XmlSigner::class , function ($app) {
             return new XmlSigner;
         });
 
         // Register XML validator
-        $this->app->singleton(XmlValidator::class, function ($app) {
+        $this->app->singleton(XmlValidator::class , function ($app) {
             return new XmlValidator;
         });
 
         // Register QR generator
-        $this->app->singleton(QrGenerator::class, function ($app) {
+        $this->app->singleton(QrGenerator::class , function ($app) {
             return new QrGenerator;
         });
 
         // Register hash chain manager
-        $this->app->singleton(HashChainManager::class, function ($app) {
+        $this->app->singleton(HashChainManager::class , function ($app) {
             return new HashChainManager;
         });
 
         // Register invoice builder
-        $this->app->bind(InvoiceBuilder::class, function ($app) {
+        $this->app->bind(InvoiceBuilder::class , function ($app) {
             return new InvoiceBuilder(
-                config('zatca.seller', []),
-                config('zatca.invoice', [])
+            config('zatca.seller', []),
+            config('zatca.invoice', [])
             );
         });
 
         // Register debug dumper
-        $this->app->singleton(DebugDumper::class, function ($app) {
+        $this->app->singleton(DebugDumper::class , function ($app) {
             return new DebugDumper;
+        });
+
+        // Register onboarding service
+        $this->app->singleton(OnboardingService::class , function ($app) {
+            return new OnboardingService(
+            $app->make(CsrGenerator::class),
+            $app->make(CertificateManager::class),
+            $app->make(ApiClientInterface::class),
+            $app->make(UblGenerator::class),
+            $app->make(XmlSigner::class),
+            $app->make(QrGenerator::class)
+            );
         });
     }
 
@@ -102,23 +115,23 @@ class ZatcaServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->publishes([
-            __DIR__.'/../config/zatca.php' => config_path('zatca.php'),
+            __DIR__ . '/../config/zatca.php' => config_path('zatca.php'),
         ], 'zatca-config');
 
         $this->publishes([
-            __DIR__.'/../database/migrations' => database_path('migrations'),
+            __DIR__ . '/../database/migrations' => database_path('migrations'),
         ], 'zatca-migrations');
 
-        $this->loadMigrationsFrom(__DIR__.'/../database/migrations');
+        $this->loadMigrationsFrom(__DIR__ . '/../database/migrations');
 
         if ($this->app->runningInConsole()) {
             $this->commands([
-                GenerateCsrCommand::class,
-                ComplianceCommand::class,
-                ComplianceCheckCommand::class,
-                ProductionCsidCommand::class,
-                RenewCsidCommand::class,
-                CleanupCommand::class,
+                GenerateCsrCommand::class ,
+                ComplianceCommand::class ,
+                ComplianceCheckCommand::class ,
+                ProductionCsidCommand::class ,
+                RenewCsidCommand::class ,
+                CleanupCommand::class ,
             ]);
         }
     }
@@ -130,16 +143,17 @@ class ZatcaServiceProvider extends ServiceProvider
     {
         return [
             'zatca',
-            ApiClientInterface::class,
-            CsrGenerator::class,
-            CertificateManager::class,
-            UblGenerator::class,
-            XmlSigner::class,
-            XmlValidator::class,
-            QrGenerator::class,
-            HashChainManager::class,
-            InvoiceBuilder::class,
-            DebugDumper::class,
+            ApiClientInterface::class ,
+            CsrGenerator::class ,
+            CertificateManager::class ,
+            UblGenerator::class ,
+            XmlSigner::class ,
+            XmlValidator::class ,
+            QrGenerator::class ,
+            HashChainManager::class ,
+            InvoiceBuilder::class ,
+            DebugDumper::class ,
+            OnboardingService::class ,
         ];
     }
 }

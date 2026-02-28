@@ -60,6 +60,14 @@ class ZatcaManager
     }
 
     /**
+     * Get the Onboarding service.
+     */
+    public function onboarding(): \Corecave\Zatca\Services\OnboardingService
+    {
+        return $this->app->make(\Corecave\Zatca\Services\OnboardingService::class);
+    }
+
+    /**
      * Get the API client.
      */
     public function client(): ApiClientInterface
@@ -348,59 +356,56 @@ class ZatcaManager
     }
 
     /**
+     * Build an OnboardingProfile from config values.
+     */
+    public function buildProfileFromConfig(): \Corecave\Zatca\DTO\OnboardingProfile
+    {
+        $csrConfig = config('zatca.csr', []);
+
+        return new \Corecave\Zatca\DTO\OnboardingProfile(
+            $csrConfig['organization'] ?? 'Unknown',
+            $csrConfig['organization_unit'] ?? 'Unknown',
+            $csrConfig['common_name'] ?? 'Unknown',
+            $csrConfig['vat_number'] ?? '300000000000003',
+            $csrConfig['invoice_types'] ?? '1100',
+            $csrConfig['location'] ?? [],
+            $csrConfig['business_category'] ?? 'Technology',
+            $csrConfig['serial_number'] ?? null,
+            config('zatca.environment', 'sandbox')
+        );
+    }
+
+    /**
      * Automatically onboard and get a compliance certificate.
      *
      * This is primarily for sandbox mode where OTP can be any value.
      * For simulation/production, use the zatca:compliance command.
      *
      * @param  string  $otp  OTP code (default: '123456' for sandbox)
+     * @param  \Corecave\Zatca\DTO\OnboardingProfile|null  $profile
      *
      * @throws CertificateException
      */
-    public function autoOnboard(string $otp = '123456'): CertificateInterface
+    public function autoOnboard(string $otp = '123456', ?\Corecave\Zatca\DTO\OnboardingProfile $profile = null): CertificateInterface
     {
         Log::info('ZATCA: Starting auto-onboard process');
 
-        // Generate fresh CSR with config values
-        $csrGenerator = $this->csr();
-        $csrConfig = config('zatca.csr');
+        $profile = $profile ?? $this->buildProfileFromConfig();
 
-        $csrData = $csrGenerator->generate([
-            'organization' => $csrConfig['organization'],
-            'organization_unit' => $csrConfig['organization_unit'],
-            'common_name' => $csrConfig['common_name'],
-            'vat_number' => $csrConfig['vat_number'],
-            'invoice_types' => $csrConfig['invoice_types'] ?? '1100',
-            'location' => $csrConfig['location'] ?? [],
-            'business_category' => $csrConfig['business_category'] ?? 'Technology',
-        ]);
+        // Generate fresh CSR with config values
+        $csrData = $this->onboarding()->generateCsr($profile);
 
         Log::info('ZATCA: CSR generated successfully');
 
-        // Request compliance CSID from ZATCA
-        $client = $this->app->make(ApiClientInterface::class);
-
         try {
-            $response = $client->requestComplianceCsid($csrData['csr'], $otp);
-            Log::info('ZATCA: Compliance CSID received', [
-                'request_id' => $response['requestID'] ?? 'N/A',
-            ]);
+            $certificate = $this->onboarding()->getComplianceCsid($csrData['csr'], $csrData['private_key'], $otp);
+            Log::info('ZATCA: Compliance certificate obtained and stored successfully');
+            
+            return $certificate;
         } catch (\Exception $e) {
             Log::error('ZATCA: Failed to get compliance CSID', ['error' => $e->getMessage()]);
             throw CertificateException::csrGenerationFailed('Failed to get compliance CSID: '.$e->getMessage());
         }
-
-        // Create and store certificate
-        $certificate = Certificate::fromApiResponse($response, $csrData['private_key'], 'compliance');
-
-        // Deactivate old certificates and store new one
-        $certManager = $this->certificate();
-        $certManager->deactivateAll('compliance');
-        $certManager->store($certificate);
-
-        Log::info('ZATCA: Compliance certificate stored successfully');
-
-        return $certificate;
     }
 
     /**
