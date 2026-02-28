@@ -355,6 +355,53 @@ When specifying buyer information for B2B invoices, use the appropriate scheme:
 | `700` | 700 Number | Variable |
 | `OTH` | Other ID | Variable |
 
+## Customizing Seller Information
+
+By default, the package uses the seller information defined in your `.env` and `config/zatca.php` configuration. If you need to override these details dynamically (e.g., in a multi-tenant application), you can use the `setSeller()` method on the `InvoiceBuilder`.
+
+```php
+use Corecave\Zatca\Invoice\InvoiceBuilder;
+
+$invoice = InvoiceBuilder::standard()
+    ->setSeller([
+        // Required: Legal Entity Name (Arabic or English)
+        'name' => 'Your Company Name Ltd.', 
+
+        // Required: 15-digit VAT number (must start with 3 and end with 3)
+        'vat_number' => '312345678900003',
+
+        // Optional: Commercial Registration Number (CRN) or other ID
+        // If omitted, the package extracts the middle 10 digits from the VAT number.
+        'registration_number' => '1234567890',
+        
+        // Optional: The scheme of the registration number (e.g., 'CRN', 'MOM', 'SAG')
+        // Automatically detected if omitted.
+        'registration_scheme' => 'CRN',
+
+        // Required: Postal Address Details
+        'address' => [
+            'street' => 'King Fahd Road',      // Required (BT-35)
+            'building' => '1234',              // Exactly 4 digits (KSA-17)
+            'additional_number' => '1234',     // Exactly 4 digits (KSA-23)
+            'district' => 'Al Olaya',          // Required (KSA-3)
+            'city' => 'Riyadh',                // Required (BT-37)
+            'postal_code' => '12345',          // Exactly 5 digits (BT-38)
+            
+            // Optional fields
+            'province' => 'Riyadh Province',   
+            'additional_street' => 'Branch St',
+            'country' => 'SA',                 // Defaults to 'SA'
+        ],
+    ])
+    // ... continue building invoice
+    ->build();
+```
+
+**Key ZATCA Validations:**
+- `building` and `additional_number` must be exactly **4 digits**.
+- `postal_code` must be exactly **5 digits** for Saudi Arabia.
+- `vat_number` must be 15 digits, starting with 3.
+
 ## Creating Credit Notes (Refunds)
 
 ```php
