@@ -4,6 +4,7 @@ namespace Corecave\Zatca\Models;
 
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Model;
+use Spatie\Multitenancy\Models\Concerns\UsesTenantConnection;
 
 /**
  * @property int $id
@@ -21,6 +22,8 @@ use Illuminate\Database\Eloquent\Model;
  */
 class ZatcaCertificate extends Model
 {
+    use UsesTenantConnection;
+
     /**
      * The table associated with the model.
      */
