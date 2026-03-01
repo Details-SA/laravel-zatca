@@ -10,9 +10,9 @@ class HashChainManager
 {
     /**
      * The initial hash value for the first invoice.
-     * This is base64 of SHA-256 hash of "0".
+     * This is base64(sha256("0", binary=true)) per ZATCA spec.
      */
-    private const INITIAL_HASH = 'NWZlY2ViNjZmZmMzNmY3Y2QzOTAzNmQ5MmUyOWZjNjBlOTA4ODNlMTNkNjUwNWQ2Njc0N2ZhZDc2YzM4OWQ1MA==';
+    private const INITIAL_HASH = 'X+zrZv/IbzjZUnhsbWlsecLbwjndTpG0ZynXOif7V+k=';
 
     /**
      * Get the next Invoice Counter Value (ICV).
@@ -21,16 +21,24 @@ class HashChainManager
     public function getNextIcv(): int
     {
         return DB::transaction(function () {
-            // PostgreSQL doesn't support FOR UPDATE with aggregate functions.
-            // Lock the table to ensure atomicity, then get max ICV.
             $driver = DB::connection()->getDriverName();
 
             if ($driver === 'pgsql') {
                 // Use advisory lock for PostgreSQL
                 DB::select('SELECT pg_advisory_xact_lock(1)');
+                $maxIcv = ZatcaInvoice::max('icv');
             }
-
-            $maxIcv = ZatcaInvoice::max('icv');
+            elseif ($driver === 'mysql' || $driver === 'mariadb') {
+                // Use SELECT ... FOR UPDATE on MySQL/MariaDB for row-level locking
+                $result = DB::select(
+                    'SELECT MAX(icv) as max_icv FROM ' . (new ZatcaInvoice)->getTable() . ' FOR UPDATE'
+                );
+                $maxIcv = $result[0]->max_icv ?? null;
+            }
+            else {
+                // SQLite and others: transaction-level isolation is sufficient
+                $maxIcv = ZatcaInvoice::max('icv');
+            }
 
             return ($maxIcv ?? 0) + 1;
         });
@@ -44,7 +52,7 @@ class HashChainManager
     {
         $lastInvoice = ZatcaInvoice::orderBy('icv', 'desc')->first();
 
-        if (! $lastInvoice || empty($lastInvoice->hash)) {
+        if (!$lastInvoice || empty($lastInvoice->hash)) {
             return $this->getInitialHash();
         }
 
@@ -56,8 +64,8 @@ class HashChainManager
      */
     public function getInitialHash(): string
     {
-        // SHA-256 hash of "0" encoded in base64
-        return base64_encode(hash('sha256', '0', true));
+        // SHA-256 hash of "0" (binary), then base64 encoded
+        return self::INITIAL_HASH;
     }
 
     /**
@@ -65,7 +73,7 @@ class HashChainManager
      */
     public function generateUuid(): string
     {
-        return (string) Str::uuid();
+        return (string)Str::uuid();
     }
 
     /**
@@ -85,7 +93,8 @@ class HashChainManager
         ?string $signedXml = null,
         ?string $qrCode = null,
         ?string $referenceId = null
-    ): ZatcaInvoice {
+        ): ZatcaInvoice
+    {
         return ZatcaInvoice::create([
             'uuid' => $uuid,
             'icv' => $icv,
@@ -113,10 +122,11 @@ class HashChainManager
         ?array $zatcaResponse = null,
         ?string $signedXml = null,
         ?string $qrCode = null
-    ): bool {
+        ): bool
+    {
         $invoice = ZatcaInvoice::where('uuid', $uuid)->first();
 
-        if (! $invoice) {
+        if (!$invoice) {
             return false;
         }
 

@@ -2,28 +2,28 @@
 
 return [
     /*
-    |--------------------------------------------------------------------------
-    | Environment
-    |--------------------------------------------------------------------------
-    |
-    | Set the environment for ZATCA API calls.
-    | Options: 'sandbox', 'simulation', 'production'
-    |
-    | - sandbox: For development and testing (no real submissions)
-    | - simulation: ZATCA's simulation environment for testing
-    | - production: Live FATOORA platform
-    |
-    */
+     |--------------------------------------------------------------------------
+     | Environment
+     |--------------------------------------------------------------------------
+     |
+     | Set the environment for ZATCA API calls.
+     | Options: 'sandbox', 'simulation', 'production'
+     |
+     | - sandbox: For development and testing (no real submissions)
+     | - simulation: ZATCA's simulation environment for testing
+     | - production: Live FATOORA platform
+     |
+     */
     'environment' => env('ZATCA_ENVIRONMENT', 'sandbox'),
 
     /*
-    |--------------------------------------------------------------------------
-    | API Endpoints
-    |--------------------------------------------------------------------------
-    |
-    | ZATCA API base URLs for different environments.
-    |
-    */
+     |--------------------------------------------------------------------------
+     | API Endpoints
+     |--------------------------------------------------------------------------
+     |
+     | ZATCA API base URLs for different environments.
+     |
+     */
     'endpoints' => [
         'sandbox' => 'https://gw-fatoora.zatca.gov.sa/e-invoicing/developer-portal',
         'simulation' => 'https://gw-fatoora.zatca.gov.sa/e-invoicing/simulation',
@@ -31,24 +31,24 @@ return [
     ],
 
     /*
-    |--------------------------------------------------------------------------
-    | API Version
-    |--------------------------------------------------------------------------
-    |
-    | The ZATCA API version to use in requests.
-    |
-    */
+     |--------------------------------------------------------------------------
+     | API Version
+     |--------------------------------------------------------------------------
+     |
+     | The ZATCA API version to use in requests.
+     |
+     */
     'api_version' => env('ZATCA_API_VERSION', 'V2'),
 
     /*
-    |--------------------------------------------------------------------------
-    | CSR Configuration
-    |--------------------------------------------------------------------------
-    |
-    | Certificate Signing Request configuration for ZATCA onboarding.
-    | These values are used to generate the CSR for obtaining CSID.
-    |
-    */
+     |--------------------------------------------------------------------------
+     | CSR Configuration
+     |--------------------------------------------------------------------------
+     |
+     | Certificate Signing Request configuration for ZATCA onboarding.
+     | These values are used to generate the CSR for obtaining CSID.
+     |
+     */
     'csr' => [
         // Country code (must be 'SA' for Saudi Arabia)
         'country' => env('ZATCA_CSR_COUNTRY', 'SA'),
@@ -95,14 +95,14 @@ return [
     ],
 
     /*
-    |--------------------------------------------------------------------------
-    | Seller Information
-    |--------------------------------------------------------------------------
-    |
-    | Default seller information used in invoices.
-    | This can be overridden per invoice if needed.
-    |
-    */
+     |--------------------------------------------------------------------------
+     | Seller Information
+     |--------------------------------------------------------------------------
+     |
+     | Default seller information used in invoices.
+     | This can be overridden per invoice if needed.
+     |
+     */
     'seller' => [
         // Seller's legal name (Arabic and/or English)
         'name' => env('ZATCA_SELLER_NAME'),
@@ -138,9 +138,7 @@ return [
         'address' => [
             'street' => env('ZATCA_SELLER_STREET'),
             'building' => env('ZATCA_SELLER_BUILDING'),
-            'plot' => env('ZATCA_SELLER_PLOT'),
             'city' => env('ZATCA_SELLER_CITY'),
-            'city_subdivision' => env('ZATCA_SELLER_CITY_SUBDIVISION'),
             'district' => env('ZATCA_SELLER_DISTRICT'),
             'postal_code' => env('ZATCA_SELLER_POSTAL_CODE'),
             'additional_number' => env('ZATCA_SELLER_ADDITIONAL_NUMBER'),
@@ -149,13 +147,13 @@ return [
     ],
 
     /*
-    |--------------------------------------------------------------------------
-    | Certificate Storage
-    |--------------------------------------------------------------------------
-    |
-    | Configuration for storing ZATCA certificates and keys.
-    |
-    */
+     |--------------------------------------------------------------------------
+     | Certificate Storage
+     |--------------------------------------------------------------------------
+     |
+     | Configuration for storing ZATCA certificates and keys.
+     |
+     */
     'certificates' => [
         // Storage driver: 'database' or 'file'
         'storage' => env('ZATCA_CERT_STORAGE', 'database'),
@@ -171,13 +169,13 @@ return [
     ],
 
     /*
-    |--------------------------------------------------------------------------
-    | Invoice Settings
-    |--------------------------------------------------------------------------
-    |
-    | Default invoice configuration settings.
-    |
-    */
+     |--------------------------------------------------------------------------
+     | Invoice Settings
+     |--------------------------------------------------------------------------
+     |
+     | Default invoice configuration settings.
+     |
+     */
     'invoice' => [
         // Default currency code
         'currency' => env('ZATCA_INVOICE_CURRENCY', 'SAR'),
@@ -199,13 +197,13 @@ return [
     ],
 
     /*
-    |--------------------------------------------------------------------------
-    | API Request Settings
-    |--------------------------------------------------------------------------
-    |
-    | HTTP client configuration for ZATCA API requests.
-    |
-    */
+     |--------------------------------------------------------------------------
+     | API Request Settings
+     |--------------------------------------------------------------------------
+     |
+     | HTTP client configuration for ZATCA API requests.
+     |
+     */
     'http' => [
         // Request timeout in seconds
         'timeout' => env('ZATCA_HTTP_TIMEOUT', 30),
@@ -224,13 +222,13 @@ return [
     ],
 
     /*
-    |--------------------------------------------------------------------------
-    | Logging
-    |--------------------------------------------------------------------------
-    |
-    | Logging configuration for ZATCA operations.
-    |
-    */
+     |--------------------------------------------------------------------------
+     | Logging
+     |--------------------------------------------------------------------------
+     |
+     | Logging configuration for ZATCA operations.
+     |
+     */
     'logging' => [
         // Enable/disable logging
         'enabled' => env('ZATCA_LOGGING_ENABLED', true),
@@ -246,14 +244,14 @@ return [
     ],
 
     /*
-    |--------------------------------------------------------------------------
-    | Debug Settings
-    |--------------------------------------------------------------------------
-    |
-    | Debug configuration for ZATCA invoice processing.
-    | When enabled, generated XML and QR codes are dumped to files.
-    |
-    */
+     |--------------------------------------------------------------------------
+     | Debug Settings
+     |--------------------------------------------------------------------------
+     |
+     | Debug configuration for ZATCA invoice processing.
+     | When enabled, generated XML and QR codes are dumped to files.
+     |
+     */
     'debug' => [
         // Enable/disable debug file dumping
         'enabled' => env('ZATCA_DEBUG_ENABLED', false),
@@ -278,13 +276,13 @@ return [
     ],
 
     /*
-    |--------------------------------------------------------------------------
-    | Database Tables
-    |--------------------------------------------------------------------------
-    |
-    | Database table names for ZATCA data storage.
-    |
-    */
+     |--------------------------------------------------------------------------
+     | Database Tables
+     |--------------------------------------------------------------------------
+     |
+     | Database table names for ZATCA data storage.
+     |
+     */
     'tables' => [
         'certificates' => 'zatca_certificates',
         'invoices' => 'zatca_invoices',

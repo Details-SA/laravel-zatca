@@ -186,11 +186,47 @@ class ZatcaManager
         // Debug: dump signed XML (with QR code)
         $this->debug()->dumpSignedXml($signedXml, $invoice->getInvoiceNumber());
 
+        // Record invoice in hash chain before submission
+        $this->hashChain()->recordInvoice(
+            $invoice->getUuid(),
+            $invoice->getIcv(),
+            $invoice->getInvoiceNumber(),
+            $hash,
+            $invoice->getPreviousInvoiceHash(),
+            $invoice->isSimplified() ? 'simplified' : 'standard',
+            $invoice->isCreditNote() ? 'credit_note' : ($invoice->isDebitNote() ? 'debit_note' : 'invoice'),
+            $invoice->getTotalWithVat(),
+            $invoice->getTotalVat(),
+            $xml,
+            $signedXml,
+            $qrCode
+        );
+
         // Submit to ZATCA
         $this->client()->setCertificate($certificate);
-        $response = $this->client()->reportInvoice($signedXml, $hash, $invoice->getUuid());
 
-        return new ReportResult($invoice, $signedXml, $qrCode, $response);
+        try {
+            $response = $this->client()->reportInvoice($signedXml, $hash, $invoice->getUuid());
+
+            // Update invoice status after successful submission
+            $this->hashChain()->updateInvoiceStatus(
+                $invoice->getUuid(),
+                'reported',
+                $response,
+                $signedXml,
+                $qrCode
+            );
+
+            return new ReportResult($invoice, $signedXml, $qrCode, $response);
+        } catch (\Exception $e) {
+            // Update invoice status on failure
+            $this->hashChain()->updateInvoiceStatus(
+                $invoice->getUuid(),
+                'rejected',
+                ['error' => $e->getMessage()]
+            );
+            throw $e;
+        }
     }
 
     /**
@@ -227,23 +263,58 @@ class ZatcaManager
         // Debug: dump signed XML (before clearance)
         $this->debug()->dumpSignedXml($signedXml, $invoice->getInvoiceNumber());
 
+        // Record invoice in hash chain before submission
+        $this->hashChain()->recordInvoice(
+            $invoice->getUuid(),
+            $invoice->getIcv(),
+            $invoice->getInvoiceNumber(),
+            $hash,
+            $invoice->getPreviousInvoiceHash(),
+            $invoice->isSimplified() ? 'simplified' : 'standard',
+            $invoice->isCreditNote() ? 'credit_note' : ($invoice->isDebitNote() ? 'debit_note' : 'invoice'),
+            $invoice->getTotalWithVat(),
+            $invoice->getTotalVat(),
+            $xml,
+            $signedXml
+        );
+
         // Submit to ZATCA for clearance
         $this->client()->setCertificate($certificate);
-        $response = $this->client()->clearInvoice($signedXml, $hash, $invoice->getUuid());
 
-        // Extract cleared XML and QR code from response
-        $clearedXml = $response['clearedInvoice'] ?? $signedXml;
-        $qrCode = $this->xml()->extractQrCode($clearedXml);
+        try {
+            $response = $this->client()->clearInvoice($signedXml, $hash, $invoice->getUuid());
 
-        // Debug: dump cleared XML and QR code from ZATCA
-        if ($clearedXml !== $signedXml) {
-            $this->debug()->dumpSignedXml($clearedXml, $invoice->getInvoiceNumber().'_cleared');
+            // Extract cleared XML and QR code from response
+            $clearedXml = $response['clearedInvoice'] ?? $signedXml;
+            $qrCode = $this->xml()->extractQrCode($clearedXml) ?? '';
+
+            // Debug: dump cleared XML and QR code from ZATCA
+            if ($clearedXml !== $signedXml) {
+                $this->debug()->dumpSignedXml($clearedXml, $invoice->getInvoiceNumber().'_cleared');
+            }
+            if ($qrCode) {
+                $this->debug()->dumpQrCode($qrCode, $invoice->getInvoiceNumber());
+            }
+
+            // Update invoice status after successful clearance
+            $this->hashChain()->updateInvoiceStatus(
+                $invoice->getUuid(),
+                'cleared',
+                $response,
+                $clearedXml,
+                $qrCode ?: null
+            );
+
+            return new ClearanceResult($invoice, $clearedXml, $qrCode, $response);
+        } catch (\Exception $e) {
+            // Update invoice status on failure
+            $this->hashChain()->updateInvoiceStatus(
+                $invoice->getUuid(),
+                'rejected',
+                ['error' => $e->getMessage()]
+            );
+            throw $e;
         }
-        if ($qrCode) {
-            $this->debug()->dumpQrCode($qrCode, $invoice->getInvoiceNumber());
-        }
-
-        return new ClearanceResult($invoice, $clearedXml, $qrCode, $response);
     }
 
     /**

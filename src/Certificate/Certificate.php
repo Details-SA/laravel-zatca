@@ -59,7 +59,7 @@ class Certificate implements CertificateInterface
      */
     public static function fromApiResponse(array $response, string $privateKey, string $type = 'compliance'): self
     {
-        $certificate = base64_decode($response['binarySecurityToken'] ?? '');
+        $certificate = base64_decode(trim($response['binarySecurityToken'] ?? ''));
         $secret = $response['secret'] ?? '';
         $requestId = $response['requestID'] ?? null;
 

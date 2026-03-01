@@ -57,7 +57,7 @@ class ZatcaClient implements ApiClientInterface
         }
 
         return new Client([
-            'base_uri' => $this->environment->baseUrl().'/',
+            'base_uri' => $this->environment->baseUrl() . '/',
             'timeout' => $this->config['timeout'],
             'connect_timeout' => $this->config['connect_timeout'],
             'verify' => $this->config['verify_ssl'],
@@ -115,7 +115,7 @@ class ZatcaClient implements ApiClientInterface
         $response = $this->http->post('production/csids', [
             'headers' => $this->getAuthHeaders(),
             'json' => [
-                'compliance_request_id' => $complianceRequestId,
+                'compliance_request_id' => (int)$complianceRequestId,
             ],
         ]);
 
@@ -210,7 +210,7 @@ class ZatcaClient implements ApiClientInterface
         ];
 
         if ($this->certificate) {
-            $headers['Authorization'] = 'Basic '.$this->certificate->getAuthCredentials();
+            $headers['Authorization'] = 'Basic ' . $this->certificate->getAuthCredentials();
         }
 
         return $headers;
@@ -277,12 +277,7 @@ class ZatcaClient implements ApiClientInterface
      */
     protected function retryDecider(): callable
     {
-        return function (
-            int $retries,
-            RequestInterface $request,
-            ?ResponseInterface $response = null,
-            ?\Exception $exception = null
-        ): bool {
+        return function (int $retries, RequestInterface $request, ?ResponseInterface $response = null, ?\Exception $exception = null): bool {
             // Don't retry more than configured times
             if ($retries >= $this->config['retries']) {
                 return false;
@@ -325,16 +320,17 @@ class ZatcaClient implements ApiClientInterface
     {
         return function (callable $handler) {
             return function (RequestInterface $request, array $options) use ($handler) {
-                $promise = $handler($request, $options);
+                    $promise = $handler($request, $options);
 
-                return $promise->then(
-                    function (ResponseInterface $response) use ($request) {
-                        $this->logRequest($request, $response);
+                    return $promise->then(
+                        function (ResponseInterface $response) use ($request) {
+                    $this->logRequest($request, $response);
 
-                        return $response;
-                    }
+                    return $response;
+                }
                 );
-            };
+            }
+                ;
         };
     }
 
@@ -348,7 +344,7 @@ class ZatcaClient implements ApiClientInterface
 
         logger()->channel($channel)->log($level, 'ZATCA API Request', [
             'method' => $request->getMethod(),
-            'uri' => (string) $request->getUri(),
+            'uri' => (string)$request->getUri(),
             'status' => $response->getStatusCode(),
         ]);
     }
@@ -358,7 +354,7 @@ class ZatcaClient implements ApiClientInterface
      */
     protected function logResponse(int $statusCode, array $body): void
     {
-        if (! config('zatca.logging.enabled', true)) {
+        if (!config('zatca.logging.enabled', true)) {
             return;
         }
 

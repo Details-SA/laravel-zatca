@@ -240,8 +240,9 @@ class OnboardingService
         if (!$isSimplified) {
             $builder->setBuyer([
                 'name' => 'Test Buyer Company',
-                'vat_number' => '300000000000003',
+                'vat_number' => '312345678900003',
                 'registration_number' => '1234567890',
+                'registration_scheme' => 'CRN',
                 'address' => [
                     'street' => 'Test Street',
                     'building' => '1234',
