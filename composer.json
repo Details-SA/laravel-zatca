@@ -1,6 +1,7 @@
 {
-    "name": "corecave/laravel-zatca",
+    "name": "details-sa/laravel-zatca",
     "description": "Laravel package for ZATCA e-invoicing integration (Saudi Arabia Phase 2)",
+    "type": "library",
     "keywords": [
         "laravel",
         "zatca",
@@ -15,8 +16,8 @@
     "license": "MIT",
     "authors": [
         {
-            "name": "CoreCave",
-            "email": "dev@corecave.com"
+            "name": "CoreTech SA",
+            "email": "developer@coretech.sa"
         }
     ],
     "require": {
