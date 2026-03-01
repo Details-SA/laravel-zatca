@@ -23,14 +23,13 @@ class QrGenerator
      *
      * ZATCA Phase 2 TLV tags (per ZATCA SDK reference):
      * - Tags 1-5: Text values (seller, VAT, timestamp, amounts) as UTF-8 strings
-     * - Tag 6: Invoice Hash - base64 encoded string (DigestValue from XML signature)
-     * - Tag 7: Digital Signature Value - base64 encoded string (SignatureValue from XML)
+     * - Tag 6: Invoice Hash - raw SHA-256 bytes (32 bytes)
+     * - Tag 7: Digital Signature Value - raw ECDSA signature bytes
      * - Tag 8: ECDSA Public Key - raw SPKI DER bytes
      * - Tag 9: Certificate Signature - raw signature bytes from X.509 certificate
      *
-     * NOTE: Per ZATCA SDK reference implementation, tags 6 and 7 are stored as
-     * base64 STRINGS (encoded to UTF-8 bytes in TLV), while tags 8 and 9 are
-     * raw binary bytes.
+     * NOTE: All of tags 6-9 are stored as raw binary bytes in TLV.
+     * This keeps the final base64 output under the 1000 character limit (KSA-14).
      *
      * @param  InvoiceInterface  $invoice  The invoice
      * @param  string  $signatureValue  Base64 encoded SignatureValue from XML signature
@@ -43,17 +42,18 @@ class QrGenerator
         string $signatureValue,
         string $publicKey,
         string $certificateSignature
-    ): string {
+        ): string
+    {
         $tags = [
             1 => $this->getSellerName($invoice),
             2 => $invoice->getSellerVatNumber(),
             3 => $this->formatTimestamp($invoice->getIssueDate()),
             4 => $this->formatAmount($invoice->getTotalWithVat()),
             5 => $this->formatAmount($invoice->getTotalVat()),
-            6 => $this->getInvoiceHash($invoice),                // base64 string (DigestValue)
-            7 => $signatureValue,                                 // base64 string (SignatureValue)
-            8 => $this->formatPublicKey($publicKey),             // SPKI DER bytes
-            9 => $certificateSignature,                          // Raw cert signature bytes
+            6 => $this->getInvoiceHashRaw($invoice), // raw SHA-256 bytes (32 bytes)
+            7 => base64_decode($signatureValue), // raw ECDSA signature bytes
+            8 => $this->formatPublicKey($publicKey), // SPKI DER bytes
+            9 => $certificateSignature, // Raw cert signature bytes
         ];
 
         return $this->encoder->encode($tags);
@@ -155,7 +155,7 @@ class QrGenerator
         // If it's a PEM formatted key, extract the DER
         if (str_contains($publicKey, '-----BEGIN')) {
             $publicKey = str_replace(
-                ['-----BEGIN PUBLIC KEY-----', '-----END PUBLIC KEY-----', "\n", "\r"],
+            ['-----BEGIN PUBLIC KEY-----', '-----END PUBLIC KEY-----', "\n", "\r"],
                 '',
                 $publicKey
             );
@@ -190,7 +190,7 @@ class QrGenerator
     {
         $errors = [];
 
-        if (! $this->encoder->isValid($qrCode)) {
+        if (!$this->encoder->isValid($qrCode)) {
             $errors[] = 'Invalid TLV encoding';
 
             return ['valid' => false, 'errors' => $errors];
@@ -206,27 +206,27 @@ class QrGenerator
         }
 
         foreach ($requiredTags as $tag) {
-            if (! isset($tags[$tag]) || empty($tags[$tag])) {
+            if (!isset($tags[$tag]) || empty($tags[$tag])) {
                 $errors[] = "Missing required tag {$tag}";
             }
         }
 
         // Validate VAT number format
-        if (isset($tags[2]) && ! preg_match('/^3\d{14}$/', $tags[2])) {
+        if (isset($tags[2]) && !preg_match('/^3\d{14}$/', $tags[2])) {
             $errors[] = 'Invalid VAT number format in tag 2';
         }
 
         // Validate timestamp format
-        if (isset($tags[3]) && ! $this->isValidTimestamp($tags[3])) {
+        if (isset($tags[3]) && !$this->isValidTimestamp($tags[3])) {
             $errors[] = 'Invalid timestamp format in tag 3';
         }
 
         // Validate amounts
-        if (isset($tags[4]) && ! is_numeric($tags[4])) {
+        if (isset($tags[4]) && !is_numeric($tags[4])) {
             $errors[] = 'Invalid total amount format in tag 4';
         }
 
-        if (isset($tags[5]) && ! is_numeric($tags[5])) {
+        if (isset($tags[5]) && !is_numeric($tags[5])) {
             $errors[] = 'Invalid VAT amount format in tag 5';
         }
 
