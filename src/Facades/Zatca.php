@@ -10,6 +10,13 @@ use Illuminate\Support\Facades\Facade;
 /**
  * @method static InvoiceBuilder invoice()
  * @method static \Corecave\Zatca\Certificate\CertificateManager certificate()
+ * @method static \Corecave\Zatca\Certificate\CsrGenerator csr()
+ * @method static array generateCsr(array $params = [], ?string $environment = null)
+ * @method static array runCompliance(string $otp, array $options = [])
+ * @method static array runComplianceChecks(?\Corecave\Zatca\Certificate\Certificate $certificate = null, array $options = [])
+ * @method static array requestProductionCsid(?string $requestId = null, ?\Corecave\Zatca\Certificate\Certificate $complianceCert = null, array $options = [])
+ * @method static array renewProductionCsid(string $otp, array $options = [])
+ * @method static array cleanup(array $options = [])
  * @method static \Corecave\Zatca\Client\ZatcaClient client()
  * @method static \Corecave\Zatca\Results\ReportResult report(InvoiceInterface $invoice)
  * @method static \Corecave\Zatca\Results\ClearanceResult clear(InvoiceInterface $invoice)

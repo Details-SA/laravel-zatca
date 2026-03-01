@@ -140,6 +140,33 @@ This generates:
 - A private key (stored securely)
 - A CSR file for submission to ZATCA
 
+#### Generate CSR via API (multi-tenant friendly)
+
+You can generate a CSR programmatically and pass tenant-specific parameters
+without relying on `.env`:
+
+```php
+use Corecave\Zatca\Facades\Zatca;
+
+$result = Zatca::generateCsr([
+    'organization' => $tenant->company_name,
+    'organization_unit' => $tenant->branch_name,
+    'common_name' => $tenant->common_name,
+    'vat_number' => $tenant->vat_number,
+    'invoice_types' => '1100', // 1000=B2C, 0100=B2B, 1100=Both
+    'business_category' => $tenant->business_category ?? 'Technology',
+    'location' => [
+        'city' => $tenant->city ?? 'Riyadh',
+    ],
+], $tenant->environment); // optional: sandbox|simulation|production
+
+// $result['csr'], $result['private_key'], $result['public_key'], $result['serial_number']
+```
+
+Notes:
+- Any values not provided fall back to `config('zatca.csr')`.
+- If you omit `serial_number`, it is generated automatically based on environment.
+
 ### Step 2: Get Compliance CSID & Run Compliance Checks
 
 1. Log in to the appropriate ZATCA portal:
@@ -163,12 +190,49 @@ php artisan zatca:compliance --otp=123456
 # 4. Display pass/fail status for each check
 ```
 
+#### Compliance via API (multi-tenant friendly)
+
+```php
+use Corecave\Zatca\Facades\Zatca;
+
+$result = Zatca::compliance('123456', [
+    'csr_params' => [
+        'organization' => $tenant->company_name,
+        'organization_unit' => $tenant->branch_name,
+        'common_name' => $tenant->common_name,
+        'vat_number' => $tenant->vat_number,
+        'invoice_types' => '1100',
+        'business_category' => $tenant->business_category ?? 'Technology',
+        'location' => ['city' => $tenant->city ?? 'Riyadh'],
+    ],
+    'environment' => $tenant->environment, // sandbox|simulation|production
+    'run_checks' => true,
+    'check_options' => [
+        'type' => 'all', // all|simplified|standard
+    ],
+]);
+
+// $result['certificate'] (compliance), $result['checks'], etc.
+```
+
 ### Step 3: Get Production CSID
 
 After **ALL** compliance checks pass, request your production certificate:
 
 ```bash
 php artisan zatca:production-csid
+```
+
+#### Production CSID via API
+
+```php
+use Corecave\Zatca\Facades\Zatca;
+
+$result = Zatca::requestProductionCsid(
+    $requestId, // optional; will use stored compliance certificate request ID if present
+    null,
+    ['environment' => $tenant->environment]
+);
 ```
 
 **Important:**
@@ -186,6 +250,22 @@ use Corecave\Zatca\Facades\Zatca;
 
 // The package automatically uses your production certificate
 $result = Zatca::process($invoice);
+```
+
+#### Renew Production CSID via API
+
+```php
+use Corecave\Zatca\Facades\Zatca;
+
+$result = Zatca::renewProductionCsid('123456', [
+    'csr_params' => [
+        'organization' => $tenant->company_name,
+        'organization_unit' => $tenant->branch_name,
+        'common_name' => $tenant->common_name,
+        'vat_number' => $tenant->vat_number,
+    ],
+    'environment' => $tenant->environment,
+]);
 ```
 
 ## Full Usage Example
@@ -260,6 +340,23 @@ class InvoiceService
             ->setIssueDate(now())
             ->setSupplyDate(now())
             ->setPaymentMethod(PaymentMethod::CREDIT)
+            ->setSeller([
+                 'name' => 'ACME Trading Co.',
+                 'name_ar' => 'شركة أكمي للتجارة',
+                 'vat_number' => '310000000000003',
+                 'registration_number' => '1000000000',
+                 'additional_ids' => [
+                     'crn' => '1000000000',
+                 ],
+                 'address' => [
+                     'street' => 'Main Street',
+                     'building' => '1234',
+                     'city' => 'Riyadh',
+                     'district' => 'Al Olaya',
+                     'postal_code' => '12345',
+                     'country' => 'SA',
+                 ],
+             ]),
             ->setBuyer([
                 'name' => $buyerData['company_name'],
                 'vat_number' => $buyerData['vat_number'],
