@@ -12,6 +12,7 @@ class CsrGenerator
      * ZATCA Certificate Template Name.
      */
     private const ZATCA_TEMPLATE_NAME = 'ZATCA-Code-Signing';
+    private const PRE_ZATCA_TEMPLATE_NAME = 'PREZATCA-Code-Signing';
 
     /**
      * ZATCA-specific OIDs for Subject Alternative Name extensions.
@@ -116,7 +117,7 @@ class CsrGenerator
             ? ($location['city'] ?? 'Riyadh')
             : $location;
         $businessCategory = $config['business_category'] ?? 'Technology';
-        $templateName = self::ZATCA_TEMPLATE_NAME;
+        $templateName = in_array(config('zatca.environment', 'sandbox'), ['sandbox', 'simulation']) ? self::PRE_ZATCA_TEMPLATE_NAME : self::ZATCA_TEMPLATE_NAME;
 
         return <<<EOT
 # ZATCA CSR Configuration
