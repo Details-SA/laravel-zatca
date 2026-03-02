@@ -763,6 +763,21 @@ class ZatcaManager
         // Debug: dump signed XML (before clearance)
         $this->debug()->dumpSignedXml($signedXml, $invoice->getInvoiceNumber());
 
+        // Generate QR code (per ZATCA spec):
+        // Tag 7 = SignatureValue (base64 string)
+        // Tag 8 = Public Key (raw DER bytes)
+        // Tag 9 = Certificate Signature (raw bytes from X.509 cert)
+        $signatureValue = $this->signer()->getSignatureValue($signedXml);
+        $publicKeyDer = $certificate->getPublicKeyRaw();
+        $certificateSignature = $certificate->getCertificateSignature();
+        $qrCode = $this->qr()->generate($invoice, $signatureValue, $publicKeyDer, $certificateSignature);
+
+        // Debug: dump QR code
+        $this->debug()->dumpQrCode($qrCode, $invoice->getInvoiceNumber());
+
+        // Add QR code to XML
+        $signedXml = $this->xml()->addQrCode($signedXml, $qrCode);
+
         // Submit to ZATCA for clearance
         $this->client()->setCertificate($certificate);
         $response = $this->client()->clearInvoice($signedXml, $hash, $invoice->getUuid());
