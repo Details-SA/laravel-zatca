@@ -68,11 +68,11 @@ class InvoiceBuilder
     /**
      * Create a standard (B2B) invoice builder.
      */
-    public static function standard(): self
+    public static function standard(?array $sellerConfig = null, ?array $invoiceConfig = null): self
     {
         $builder = new self(
-            config('zatca.seller', []),
-            config('zatca.invoice', [])
+            $sellerConfig ?? config('zatca.seller', []),
+            $invoiceConfig ?? config('zatca.invoice', [])
         );
 
         $builder->isSimplified = false;
@@ -85,11 +85,11 @@ class InvoiceBuilder
     /**
      * Create a simplified (B2C) invoice builder.
      */
-    public static function simplified(): self
+    public static function simplified(?array $sellerConfig = null, ?array $invoiceConfig = null): self
     {
         $builder = new self(
-            config('zatca.seller', []),
-            config('zatca.invoice', [])
+            $sellerConfig ?? config('zatca.seller', []),
+            $invoiceConfig ?? config('zatca.invoice', [])
         );
 
         $builder->isSimplified = true;
@@ -102,11 +102,11 @@ class InvoiceBuilder
     /**
      * Create a credit note builder.
      */
-    public static function creditNote(bool $simplified = false): self
+    public static function creditNote(bool $simplified = false, ?array $sellerConfig = null, ?array $invoiceConfig = null): self
     {
         $builder = new self(
-            config('zatca.seller', []),
-            config('zatca.invoice', [])
+            $sellerConfig ?? config('zatca.seller', []),
+            $invoiceConfig ?? config('zatca.invoice', [])
         );
 
         $builder->isSimplified = $simplified;
@@ -122,11 +122,11 @@ class InvoiceBuilder
     /**
      * Create a debit note builder.
      */
-    public static function debitNote(bool $simplified = false): self
+    public static function debitNote(bool $simplified = false, ?array $sellerConfig = null, ?array $invoiceConfig = null): self
     {
         $builder = new self(
-            config('zatca.seller', []),
-            config('zatca.invoice', [])
+            $sellerConfig ?? config('zatca.seller', []),
+            $invoiceConfig ?? config('zatca.invoice', [])
         );
 
         $builder->isSimplified = $simplified;

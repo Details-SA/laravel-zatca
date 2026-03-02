@@ -31,6 +31,10 @@ use Illuminate\Support\Str;
 class ZatcaManager
 {
     protected Application $app;
+    
+    protected array $csrConfig = [];
+
+    protected array $sellerConfig = [];
 
     protected ?ApiClientInterface $client = null;
 
@@ -39,6 +43,44 @@ class ZatcaManager
     public function __construct(Application $app)
     {
         $this->app = $app;
+        $this->csrConfig = config('zatca.csr', []);
+        $this->sellerConfig = config('zatca.seller', []);
+    }
+
+    /**
+     * Set the CSR configuration programmatically.
+     */
+    public function setCsrConfig(array $config): self
+    {
+        $this->csrConfig = array_merge($this->csrConfig, $config);
+
+        return $this;
+    }
+
+    /**
+     * Get the current CSR configuration.
+     */
+    public function getCsrConfig(): array
+    {
+        return $this->csrConfig;
+    }
+
+    /**
+     * Set the seller configuration programmatically.
+     */
+    public function setSellerConfig(array $config): self
+    {
+        $this->sellerConfig = array_merge($this->sellerConfig, $config);
+
+        return $this;
+    }
+
+    /**
+     * Get the current seller configuration.
+     */
+    public function getSellerConfig(): array
+    {
+        return $this->sellerConfig;
     }
 
     /**
@@ -46,7 +88,10 @@ class ZatcaManager
      */
     public function invoice(): InvoiceBuilder
     {
-        return $this->app->make(InvoiceBuilder::class);
+        return new InvoiceBuilder(
+            $this->sellerConfig,
+            config('zatca.invoice', [])
+        );
     }
 
     /**
@@ -62,7 +107,7 @@ class ZatcaManager
      */
     public function csr(): CsrGenerator
     {
-        return $this->app->make(CsrGenerator::class);
+        return new CsrGenerator($this->csrConfig);
     }
 
     /**
@@ -539,7 +584,7 @@ class ZatcaManager
             unset($params['environment']);
         }
 
-        $config = array_replace_recursive(config('zatca.csr', []), $params);
+        $config = array_replace_recursive($this->csrConfig, $params);
 
         if (empty($config['country'])) {
             $config['country'] = 'SA';
@@ -593,17 +638,17 @@ class ZatcaManager
         $isDebit = $sample['subtype'] === 'debit_note';
 
         if ($isCredit) {
-            $builder = InvoiceBuilder::creditNote($isSimplified);
+            $builder = InvoiceBuilder::creditNote($isSimplified, $this->sellerConfig);
             $builder->setOriginalInvoice('SME00001');
             $builder->setReason('Cancellation or Returned');
         } elseif ($isDebit) {
-            $builder = InvoiceBuilder::debitNote($isSimplified);
+            $builder = InvoiceBuilder::debitNote($isSimplified, $this->sellerConfig);
             $builder->setOriginalInvoice('SME00001');
             $builder->setReason('Price adjustment or Additional charges');
         } else {
             $builder = $isSimplified
-                ? InvoiceBuilder::simplified()
-                : InvoiceBuilder::standard();
+                ? InvoiceBuilder::simplified($this->sellerConfig)
+                : InvoiceBuilder::standard($this->sellerConfig);
         }
 
         $builder->setInvoiceNumber("SME0000{$number}");
@@ -879,10 +924,11 @@ class ZatcaManager
      * obtain a compliance certificate if none exists or if forceNew is true.
      *
      * @param  bool  $forceNew  Force generation of a new certificate
+     * @param  array  $csrParams  Optional CSR parameters to override config
      *
      * @throws CertificateException
      */
-    public function getOrCreateCertificate(bool $forceNew = false): CertificateInterface
+    public function getOrCreateCertificate(bool $forceNew = false, array $csrParams = []): CertificateInterface
     {
         $certManager = $this->certificate();
 
@@ -890,17 +936,17 @@ class ZatcaManager
         if (! $forceNew) {
             $cert = $certManager->getActive('compliance') ?? $certManager->getActive('production');
             if ($cert && $cert->isActive()) {
-                // Verify the certificate VAT matches config
-                if ($this->certificateMatchesConfig($cert)) {
+                // Verify the certificate VAT matches config/overrides
+                if ($this->certificateMatchesConfig($cert, $csrParams['vat_number'] ?? null)) {
                     return $cert;
                 }
-                Log::info('ZATCA: Existing certificate VAT does not match config, generating new certificate');
+                Log::info('ZATCA: Existing certificate VAT does not match config/overrides, generating new certificate');
             }
         }
 
         // In sandbox mode, auto-generate certificate
         if ($this->isSandbox()) {
-            return $this->autoOnboard();
+            return $this->autoOnboard('123456', $csrParams);
         }
 
         throw CertificateException::notFound('compliance or production');
@@ -922,7 +968,7 @@ class ZatcaManager
 
         // Generate fresh CSR with config values
         $csrGenerator = $this->csr();
-        $csrConfig = config('zatca.csr');
+        $csrConfig = $this->csrConfig;
 
         $csrData = $csrGenerator->generate([
             'organization' => $csrConfig['organization'],
@@ -968,7 +1014,7 @@ class ZatcaManager
     protected function certificateMatchesConfig(CertificateInterface $cert): bool
     {
         try {
-            $configVat = config('zatca.csr.vat_number');
+            $configVat = $this->csrConfig['vat_number'] ?? null;
             if (! $configVat) {
                 return true; // No config VAT to check against
             }
