@@ -15,10 +15,10 @@ return new class extends Migration
             $table->id();
 
             // UUID (Universally Unique Identifier)
-            $table->uuid('uuid')->unique();
+            $table->uuid('uuid')->index();
 
             // Invoice Counter Value (must be sequential)
-            $table->unsignedBigInteger('icv')->unique();
+            $table->unsignedBigInteger('icv')->index();
 
             // Invoice number (from your system)
             $table->string('invoice_number');
