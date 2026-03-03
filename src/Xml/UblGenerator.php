@@ -1047,6 +1047,11 @@ class UblGenerator
      */
     public function addQrCode(string $xml, string $qrCode): string
     {
+        // Decode if base64 encoded
+        if (str_starts_with($xml, 'PD94bWwgdmVyc2l')) {
+            $xml = base64_decode($xml);
+        }
+
         $doc = new DOMDocument;
         $doc->loadXML($xml);
 
@@ -1069,6 +1074,11 @@ class UblGenerator
      */
     public function extractQrCode(string $xml): ?string
     {
+        // Decode if base64 encoded
+        if (str_starts_with($xml, 'PD94bWwgdmVyc2l')) {
+            $xml = base64_decode($xml);
+        }
+
         $doc = new DOMDocument;
         $doc->loadXML($xml);
 
