@@ -39,6 +39,11 @@ class XmlSigner
      */
     public function sign(string $xml, string $privateKeyPem, string $certificatePem): string
     {
+        // Decode if base64 encoded
+        if (str_starts_with($xml, 'PD94bWwgdmVyc2l')) {
+            $xml = base64_decode($xml);
+        }
+
         // Compute invoice hash before adding signature elements
         $invoiceHash = $this->generateInvoiceHash($xml);
 
@@ -82,6 +87,11 @@ class XmlSigner
      */
     public function generateInvoiceHash(string $xml): string
     {
+        // Decode if base64 encoded
+        if (str_starts_with($xml, 'PD94bWwgdmVyc2l')) {
+            $xml = base64_decode($xml);
+        }
+
         $doc = new DOMDocument;
         $doc->preserveWhiteSpace = true;
         $doc->loadXML($xml);
@@ -161,7 +171,7 @@ class XmlSigner
     protected function buildSignedInvoice(
         string $xml,
         string $invoiceHash,
-        $privateKey,
+               $privateKey,
         string $certContent,
         array $certInfo,
         string $signingTime
