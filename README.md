@@ -140,6 +140,37 @@ This generates:
 - A private key (stored securely)
 - A CSR file for submission to ZATCA
 
+#### Programmatic Configuration
+
+You can configure CSR and Seller information programmatically, which is useful for multi-tenant applications or when avoiding fixed configuration files:
+
+```php
+use Corecave\Zatca\Facades\Zatca;
+
+// Set CSR configuration for the current request
+Zatca::setCsrConfig([
+    'organization' => 'Tenant Company',
+    'vat_number' => '310000000000003',
+    'location' => [
+        'city' => 'Riyadh',
+        'district' => 'Al Olaya',
+    ],
+]);
+
+// Set Seller information for the current request
+Zatca::setSellerConfig([
+    'name' => 'Tenant Company',
+    'name_ar' => 'اسم الشركة',
+    'vat_number' => '310000000000003',
+    'address' => [
+        'street' => 'Main St',
+        'building' => '1234',
+        'city' => 'Riyadh',
+        'postal_code' => '12345',
+    ],
+]);
+```
+
 #### Generate CSR via API (multi-tenant friendly)
 
 You can generate a CSR programmatically and pass tenant-specific parameters
@@ -288,10 +319,11 @@ class InvoiceService
     /**
      * Create and submit a B2C invoice to ZATCA.
      */
-    public function createSimplifiedInvoice(array $orderData): ZatcaInvoice
+    public function createSimplifiedInvoice(array $orderData, array $sellerConfig = []): ZatcaInvoice
     {
         // Step 1: Build the invoice
-        $invoice = InvoiceBuilder::simplified()
+        // You can pass optional seller and invoice config overrides here
+        $invoice = InvoiceBuilder::simplified($sellerConfig)
             ->setInvoiceNumber('INV-' . date('Y') . '-' . str_pad($orderData['id'], 6, '0', STR_PAD_LEFT))
             ->setIssueDate(now())
             ->setSupplyDate(now())

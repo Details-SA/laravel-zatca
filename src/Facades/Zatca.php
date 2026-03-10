@@ -9,6 +9,10 @@ use Illuminate\Support\Facades\Facade;
 
 /**
  * @method static InvoiceBuilder invoice()
+ * @method static ZatcaManager setCsrConfig(array $config)
+ * @method static array getCsrConfig()
+ * @method static ZatcaManager setSellerConfig(array $config)
+ * @method static array getSellerConfig()
  * @method static \Corecave\Zatca\Certificate\CertificateManager certificate()
  * @method static \Corecave\Zatca\Certificate\CsrGenerator csr()
  * @method static array generateCsr(array $params = [], ?string $environment = null)
